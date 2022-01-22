@@ -25,7 +25,8 @@ class Aggregator(object):
         self.dim = dim
 
     def __call__(self, self_vectors, neighbor_vectors, neighbor_relations, user_embeddings, masks):
-        outputs = self._call(self_vectors, neighbor_vectors, neighbor_relations, user_embeddings, masks)
+        outputs = self._call(self_vectors, neighbor_vectors,
+                             neighbor_relations, user_embeddings, masks)
         return outputs
 
     @abstractmethod
@@ -42,17 +43,22 @@ class Aggregator(object):
         avg = False
         if not avg:
             # [batch_size, 1, 1, dim]
-            user_embeddings = tf.reshape(user_embeddings, [self.batch_size, 1, 1, self.dim])
+            user_embeddings = tf.reshape(
+                user_embeddings, [self.batch_size, 1, 1, self.dim])
 
             # [batch_size, -1, n_neighbor]
-            user_relation_scores = tf.reduce_mean(user_embeddings * neighbor_relations, axis=-1)
-            user_relation_scores_normalized = tf.nn.softmax(user_relation_scores, dim=-1)
+            user_relation_scores = tf.reduce_mean(
+                user_embeddings * neighbor_relations, axis=-1)
+            user_relation_scores_normalized = tf.nn.softmax(
+                user_relation_scores, dim=-1)
 
             # [batch_size, -1, n_neighbor, 1]
-            user_relation_scores_normalized = tf.expand_dims(user_relation_scores_normalized, axis=-1)
+            user_relation_scores_normalized = tf.expand_dims(
+                user_relation_scores_normalized, axis=-1)
 
             # [batch_size, -1, dim]
-            neighbors_aggregated = tf.reduce_mean(user_relation_scores_normalized * neighbor_vectors, axis=2)
+            neighbors_aggregated = tf.reduce_mean(
+                user_relation_scores_normalized * neighbor_vectors, axis=2)
         else:
             # [batch_size, -1, dim]
             neighbors_aggregated = tf.reduce_mean(neighbor_vectors, axis=2)
@@ -62,16 +68,19 @@ class Aggregator(object):
 
 class SumAggregator(Aggregator):
     def __init__(self, batch_size, dim, dropout=0., act=tf.nn.relu, name=None):
-        super(SumAggregator, self).__init__(batch_size, dim, dropout, act, name)
+        super(SumAggregator, self).__init__(
+            batch_size, dim, dropout, act, name)
 
-        with tf.variable_scope(self.name):
-            self.weights = tf.get_variable(
-                shape=[self.dim, self.dim], initializer=tf.contrib.layers.xavier_initializer(), name='weights')
-            self.bias = tf.get_variable(shape=[self.dim], initializer=tf.zeros_initializer(), name='bias')
+        with tf.compat.v1.variable_scope(self.name):
+            self.weights = tf.compat.v1.get_variable(
+                shape=[self.dim, self.dim], initializer=tf.compat.v1.keras.initializers.glorot_normal(), name='weights')
+            self.bias = tf.compat.v1.get_variable(
+                shape=[self.dim], initializer=tf.zeros_initializer(), name='bias')
 
     def _call(self, self_vectors, neighbor_vectors, neighbor_relations, user_embeddings, masks):
         # [batch_size, -1, dim]
-        neighbors_agg = self._mix_neighbor_vectors(neighbor_vectors, neighbor_relations, user_embeddings)
+        neighbors_agg = self._mix_neighbor_vectors(
+            neighbor_vectors, neighbor_relations, user_embeddings)
 
         # [-1, dim]
         output = tf.reshape(self_vectors + neighbors_agg, [-1, self.dim])
@@ -90,14 +99,18 @@ class LabelAggregator(Aggregator):
 
     def _call(self, self_labels, neighbor_labels, neighbor_relations, user_embeddings, masks):
         # [batch_size, 1, 1, dim]
-        user_embeddings = tf.reshape(user_embeddings, [self.batch_size, 1, 1, self.dim])
+        user_embeddings = tf.reshape(
+            user_embeddings, [self.batch_size, 1, 1, self.dim])
 
         # [batch_size, -1, n_neighbor]
-        user_relation_scores = tf.reduce_mean(user_embeddings * neighbor_relations, axis=-1)
-        user_relation_scores_normalized = tf.nn.softmax(user_relation_scores, dim=-1)
+        user_relation_scores = tf.reduce_mean(
+            user_embeddings * neighbor_relations, axis=-1)
+        user_relation_scores_normalized = tf.nn.softmax(
+            user_relation_scores, dim=-1)
 
         # [batch_size, -1]
-        neighbors_aggregated = tf.reduce_mean(user_relation_scores_normalized * neighbor_labels, axis=-1)
+        neighbors_aggregated = tf.reduce_mean(
+            user_relation_scores_normalized * neighbor_labels, axis=-1)
         output = tf.cast(masks, tf.float32) * self_labels + tf.cast(
             tf.logical_not(masks), tf.float32) * neighbors_aggregated
 
